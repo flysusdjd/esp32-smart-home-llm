@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>ESP32 智能家居控制系统</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .sensor-card {
+            transition: all 0.3s ease;
+        }
+        .sensor-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        #connectionStatus {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.3s ease forwards;
+        }
+        .animate-fadeOut {
+            animation: fadeOut 0.5s ease forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(20px); }
+        }
+        .text-blink {
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .tab-button {
+            transition: all 0.2s ease;
+        }
+        .tab-button.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 6px;
+            background: #4b5563;
+            border-radius: 5px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #3b82f6;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-white min-h-screen">
+<div class="container mx-auto px-4 py-8 max-w-6xl">
+    <!-- 顶部标题栏 -->
+    <div class="flex justify-between items-center mb-8 p-4 bg-gray-800 rounded-xl shadow-lg">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold flex items-center">
+                <i class="fas fa-home mr-3 text-blue-400"></i>
+                ESP32 智能家居控制系统
+            </h1>
+            <p class="text-gray-400 mt-1">多设备统一控制面板</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            <div id="connectionStatus" class="bg-green-500 text-white px-3 py-1 rounded-full text-sm">
+                <i class="fas fa-wifi mr-1"></i> 已连接
+            </div>
+            <div id="dataFreshness" class="bg-blue-500 text-white px-2 py-1 rounded-full text-xs">
+                <i class="fas fa-clock mr-1"></i> <span id="lastUpdateTime">--</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设备选项卡 -->
+    <div class="flex mb-6 bg-gray-800 rounded-lg p-1">
+        <button id="tabBoard1" class="tab-button flex-1 py-2 rounded-lg font-medium active" onclick="switchTab('board1')">
+            <i class="fas fa-lightbulb mr-2"></i>设备1 - 灯光控制
+        </button>
+        <button id="tabBoard2" class="tab-button flex-1 py-2 rounded-lg font-medium" onclick="switchTab('board2')">
+            <i class="fas fa-fan mr-2"></i>设备2 - 风扇控制
+        </button>
+        <button id="tabBoard3" class="tab-button flex-1 py-2 rounded-lg font-medium" onclick="switchTab('board3')">
+            <i class="fas fa-smog mr-2"></i>设备3 - 烟雾检测
+        </button>
+    </div>
+
+    <!-- 板子1内容 -->
+    <div id="board1Content" class="tab-content">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- LED 控制面板 -->
+            <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold flex items-center">
+                        <i class="fas fa-lightbulb mr-2 text-yellow-400"></i>
+                        LED 控制
+                    </h2>
+                    <div id="ledStatus" class="px-3 py-1 rounded-full font-semibold bg-blue-900">OFF</div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-400 mb-2">控制模式:</label>
+                    <div id="ledMode" class="px-3 py-1 rounded-full font-semibold inline-block bg-purple-600">AUTO</div>
+                </div>
+                <div class="mt-4 space-y-3">
+                    <button onclick="controlDevice('board1', 'ON')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-power-off mr-2"></i> 开启 LED
+                    </button>
+                    <button onclick="controlDevice('board1', 'OFF')" class="w-full py-3 bg-gradient-to-r from-red-500 to-rose-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-power-off mr-2"></i> 关闭 LED
+                    </button>
+                    <button onclick="controlDevice('board1', 'AUTO')" class="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-robot mr-2"></i> 自动模式
+                    </button>
+                </div>
+            </div>
+            <!-- 传感器数据面板 -->
+            <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-sensor mr-2 text-purple-400"></i>
+                    传感器数据
+                </h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-sun mr-2"></i>光照强度</span>
+                            <span id="lightIntensity" class="text-xl font-bold">--</span>
+                        </div>
+                        <div class="text-sm mt-1">lux</div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-person-rays mr-2"></i>人体检测</span>
+                            <span id="humanPresence" class="text-xl font-bold">--</span>
+                        </div>
+                        <div id="humanPresenceIndicator" class="h-1 mt-1 rounded-full"></div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-sliders-h mr-2"></i>光强阈值</span>
+                            <span id="lightThreshold" class="text-xl font-bold">1500</span>
+                        </div>
+                        <div class="text-sm mt-1">lux</div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg col-span-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400"><i class="fas fa-sliders-h mr-2"></i>调整光强阈值</span>
+                            <div class="flex items-center w-2/3">
+                                <input type="range" id="thresholdSlider" min="500" max="3000" step="100" value="1500"
+                                       class="w-full mr-2" oninput="updateThresholdDisplay(this.value)" onchange="updateThreshold(this.value)">
+                                <span id="thresholdValue" class="text-white font-bold w-16 text-center">1500</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 板子2内容 -->
+    <div id="board2Content" class="tab-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 风扇控制面板 -->
+            <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold flex items-center">
+                        <i class="fas fa-fan mr-2 text-blue-400"></i>
+                        风扇控制
+                    </h2>
+                    <div id="fanStatus" class="px-3 py-1 rounded-full font-semibold bg-blue-900">OFF</div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-400 mb-2">控制模式:</label>
+                    <div id="fanMode" class="px-3 py-1 rounded-full font-semibold inline-block bg-purple-600">AUTO</div>
+                </div>
+                <div class="mt-4 space-y-3">
+                    <button onclick="controlDevice('board2', 'ON')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-power-off mr-2"></i> 开启风扇
+                    </button>
+                    <button onclick="controlDevice('board2', 'OFF')" class="w-full py-3 bg-gradient-to-r from-red-500 to-rose-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-power-off mr-2"></i> 关闭风扇
+                    </button>
+                    <button onclick="controlDevice('board2', 'AUTO')" class="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-robot mr-2"></i> 自动模式
+                    </button>
+                </div>
+            </div>
+            <!-- 传感器数据面板 -->
+            <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-sensor mr-2 text-purple-400"></i>
+                    传感器数据
+                </h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-temperature-high mr-2"></i>温度</span>
+                            <span id="temperature" class="text-xl font-bold">--</span>
+                        </div>
+                        <div class="text-sm mt-1">℃</div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-droplet mr-2"></i>湿度</span>
+                            <span id="humidity" class="text-xl font-bold">--</span>
+                        </div>
+                        <div class="text-sm mt-1">%</div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-sliders-h mr-2"></i>温度阈值</span>
+                            <span id="tempThreshold" class="text-xl font-bold">20.0</span>
+                        </div>
+                        <div class="text-sm mt-1">℃</div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-sliders-h mr-2"></i>湿度阈值</span>
+                            <span id="humidThreshold" class="text-xl font-bold">90.0</span>
+                        </div>
+                        <div class="text-sm mt-1">%</div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg col-span-2">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400"><i class="fas fa-sliders-h mr-2"></i>调整温度阈值</span>
+                                <div class="flex items-center">
+                                    <input type="range" id="tempThresholdSlider" min="10" max="40" step="0.5" value="20.0"
+                                           class="w-full mr-2" oninput="updateTempThresholdDisplay(this.value)" onchange="updateTempThreshold(this.value)">
+                                    <span id="tempThresholdValue" class="text-white font-bold w-16 text-center">20.0</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-400"><i class="fas fa-sliders-h mr-2"></i>调整湿度阈值</span>
+                                <div class="flex items-center">
+                                    <input type="range" id="humidThresholdSlider" min="30" max="100" step="1" value="90.0"
+                                           class="w-full mr-2" oninput="updateHumidThresholdDisplay(this.value)" onchange="updateHumidThreshold(this.value)">
+                                    <span id="humidThresholdValue" class="text-white font-bold w-16 text-center">90.0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 板子3内容 -->
+    <div id="board3Content" class="tab-content hidden">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 报警控制面板 -->
+            <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold flex items-center">
+                        <i class="fas fa-bell mr-2 text-red-400"></i>
+                        报警控制
+                    </h2>
+                    <div id="buzzerStatus" class="px-3 py-1 rounded-full font-semibold bg-blue-900">OFF</div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-400 mb-2">控制模式:</label>
+                    <div id="buzzerMode" class="px-3 py-1 rounded-full font-semibold inline-block bg-purple-600">AUTO</div>
+                </div>
+                <div class="mt-4 space-y-3">
+                    <button onclick="controlDevice('board3', 'BUZZER', 'ON')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-volume-up mr-2"></i> 开启蜂鸣器
+                    </button>
+                    <button onclick="controlDevice('board3', 'BUZZER', 'OFF')" class="w-full py-3 bg-gradient-to-r from-red-500 to-rose-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-volume-mute mr-2"></i> 关闭蜂鸣器
+                    </button>
+                    <button onclick="controlDevice('board3', 'BUZZER', 'AUTO')" class="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-robot mr-2"></i> 自动模式
+                    </button>
+                </div>
+            </div>
+            <!-- 舵机(窗户)控制面板 -->
+            <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold flex items-center">
+                        <i class="fas fa-window-maximize mr-2 text-yellow-400"></i>
+                        窗户控制
+                    </h2>
+                    <div id="servoStatus" class="px-3 py-1 rounded-full font-semibold bg-blue-900">OFF</div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-gray-400 mb-2">控制模式:</label>
+                    <div id="servoMode" class="px-3 py-1 rounded-full font-semibold inline-block bg-purple-600">AUTO</div>
+                </div>
+                <div class="mt-4 space-y-3">
+                    <button onclick="controlDevice('board3', 'SERVO', 'ON')" class="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-door-on mr-2"></i> 打开窗户
+                    </button>
+                    <button onclick="controlDevice('board3', 'SERVO', 'OFF')" class="w-full py-3 bg-gradient-to-r from-red-500 to-rose-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-door-off mr-2"></i> 关闭窗户
+                    </button>
+                    <button onclick="controlDevice('board3', 'SERVO', 'AUTO')" class="w-full py-3 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg text-white font-bold text-lg transform hover:scale-[1.02] transition-transform flex items-center justify-center">
+                        <i class="fas fa-robot mr-2"></i> 自动模式
+                    </button>
+                </div>
+            </div>
+            <!-- 传感器数据面板 -->
+            <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
+                <h2 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-sensor mr-2 text-purple-400"></i>
+                    传感器数据
+                </h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-smog mr-2"></i>烟雾浓度</span>
+                            <span id="smokeValue" class="text-xl font-bold">--</span>
+                        </div>
+                        <div class="text-sm mt-1">(0-4095)</div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400"><i class="fas fa-sliders-h mr-2"></i>烟雾阈值</span>
+                            <span id="smokeThreshold" class="text-xl font-bold">500</span>
+                        </div>
+                        <div class="text-sm mt-1">(0-4095)</div>
+                    </div>
+                    <div class="sensor-card bg-gray-700 p-4 rounded-lg col-span-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-400"><i class="fas fa-sliders-h mr-2"></i>调整烟雾阈值</span>
+                            <div class="flex items-center w-2/3">
+                                <input type="range" id="smokeThresholdSlider" min="100" max="2000" step="50" value="500"
+                                       class="w-full mr-2" oninput="updateSmokeThresholdDisplay(this.value)" onchange="updateSmokeThreshold(this.value)">
+                                <span id="smokeThresholdValue" class="text-white font-bold w-16 text-center">500</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统状态信息 -->
+    <div class="mt-8 bg-gray-800 rounded-xl p-6">
+        <h2 class="text-xl font-bold mb-4 flex items-center">
+            <i class="fas fa-info-circle mr-2 text-blue-400"></i>
+            系统状态
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="p-3 bg-gray-700 rounded">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">系统状态:</span>
+                    <span id="systemStatus" class="font-semibold">运行中</span>
+                </div>
+            </div>
+            <div class="p-3 bg-gray-700 rounded">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">数据刷新:</span>
+                    <span id="refreshStatus" class="font-semibold">正常</span>
+                </div>
+            </div>
+            <div class="p-3 bg-gray-700 rounded">
+                <div class="flex justify-between">
+                    <span class="text-gray-400">最后更新:</span>
+                    <span id="lastUpdate" class="font-semibold">--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 调试控制台 -->
+<div id="debugConsole" class="fixed bottom-0 left-0 right-0 bg-gray-900 text-gray-300 p-2 text-xs max-h-20 overflow-y-auto hidden">
+    <div id="debugLog"></div>
+</div>
+
+<script>
+    // 全局状态存储
+    const systemState = {
+        currentTab: 'board1',
+        board1: {
+            lastUpdate: null,
+            data: {
+                light_intensity: null,
+                human_presence: null,
+                led_status: null,
+                led_mode: null,
+                light_threshold: 1500
+            }
+        },
+        board2: {
+            lastUpdate: null,
+            data: {
+                temperature: null,
+                humidity: null,
+                fan_status: null,
+                fan_mode: null,
+                temp_threshold: 20.0,
+                humidity_threshold: 90.0
+            }
+        },
+        board3: {
+            lastUpdate: null,
+            data: {
+                smoke_value: null,
+                buzzer_status: null,
+                servo_status: null,
+                system_mode: null,
+                smoke_threshold: 500,
+                require_reset: false
+            }
+        },
+        connection: {
+            status: 'connected',
+            lastSuccess: null,
+            retryCount: 0
+        }
+    };
+
+    // 初始化页面
+    document.addEventListener("DOMContentLoaded", function() {
+        initPage();
+
+        // 快捷键调试: Ctrl+Shift+D 打开调试控制台
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+                document.getElementById('debugConsole').classList.toggle('hidden');
+            }
+        });
+    });
+
+    function initPage() {
+        // 初始化UI显示
+        updateUI('board1', systemState.board1.data);
+        updateUI('board2', systemState.board2.data);
+        updateUI('board3', systemState.board3.data);
+
+        // 设置阈值滑块初始值
+        document.getElementById("thresholdSlider").value = systemState.board1.data.light_threshold;
+        document.getElementById("thresholdValue").textContent = systemState.board1.data.light_threshold;
+
+        document.getElementById("tempThresholdSlider").value = systemState.board2.data.temp_threshold;
+        document.getElementById("tempThresholdValue").textContent = systemState.board2.data.temp_threshold;
+        document.getElementById("humidThresholdSlider").value = systemState.board2.data.humidity_threshold;
+        document.getElementById("humidThresholdValue").textContent = systemState.board2.data.humidity_threshold;
+
+        document.getElementById("smokeThresholdSlider").value = systemState.board3.data.smoke_threshold;
+        document.getElementById("smokeThresholdValue").textContent = systemState.board3.data.smoke_threshold;
+
+        // 开始数据刷新循环
+        fetchStatus('board1');
+        fetchStatus('board2');
+        fetchStatus('board3');
+        setInterval(() => {
+            fetchStatus('board1');
+            fetchStatus('board2');
+            fetchStatus('board3');
+        }, 2000);  // 每2秒刷新一次
+
+        // 添加调试信息
+        addDebugLog("系统初始化完成");
+    }
+
+    // 切换选项卡
+    function switchTab(tabName) {
+        systemState.currentTab = tabName;
+
+        // 更新按钮状态
+        document.getElementById('tabBoard1').classList.toggle('active', tabName === 'board1');
+        document.getElementById('tabBoard2').classList.toggle('active', tabName === 'board2');
+        document.getElementById('tabBoard3').classList.toggle('active', tabName === 'board3');
+
+        // 更新内容显示
+        document.getElementById('board1Content').classList.toggle('hidden', tabName !== 'board1');
+        document.getElementById('board2Content').classList.toggle('hidden', tabName !== 'board2');
+        document.getElementById('board3Content').classList.toggle('hidden', tabName !== 'board3');
+
+        addDebugLog(`切换到 ${tabName} 选项卡`);
+    }
+
+    // 更新UI显示
+    function updateUI(board, data) {
+        if (board === 'board1') {
+            // 更新LED状态
+            updateLEDStatus(data.led_status, data.led_mode);
+
+            // 更新传感器数据
+            updateSensorData({
+                light_intensity: data.light_intensity,
+                human_presence: data.human_presence,
+                light_threshold: data.light_threshold
+            });
+        } else if (board === 'board2') {
+            // 更新风扇状态
+            updateFanStatus(data.fan_status, data.fan_mode);
+
+            // 更新传感器数据
+            updateFanSensorData({
+                temperature: data.temperature,
+                humidity: data.humidity,
+                temp_threshold: data.temp_threshold,
+                humidity_threshold: data.humidity_threshold
+            });
+        } else if (board === 'board3') {
+            // 更新报警状态
+            updateAlarmStatus(data.buzzer_status, data.servo_status, data.system_mode);
+
+            // 更新传感器数据
+            updateSmokeSensorData({
+                smoke_value: data.smoke_value,
+                smoke_threshold: data.smoke_threshold
+            });
+        }
+
+        // 更新系统状态显示
+        updateSystemStatus();
+    }
+
+    // 更新LED状态显示
+    function updateLEDStatus(status, mode) {
+        const ledStatus = document.getElementById("ledStatus");
+        const ledMode = document.getElementById("ledMode");
+
+        // 更新LED状态
+        if (status !== undefined && status !== null) {
+            ledStatus.textContent = status;
+            systemState.board1.data.led_status = status;
+
+            if (status === "ON") {
+                ledStatus.className = "px-3 py-1 rounded-full font-semibold bg-gradient-to-r from-yellow-500 to-amber-600 animate-pulse";
+            } else {
+                ledStatus.className = "px-3 py-1 rounded-full font-semibold bg-blue-900";
+            }
+        }
+
+        // 更新模式显示
+        if (mode !== undefined && mode !== null) {
+            ledMode.textContent = mode;
+            systemState.board1.data.led_mode = mode;
+
+            if (mode === "AUTO") {
+                ledMode.className = "px-3 py-1 rounded-full font-semibold inline-block bg-purple-600";
+            } else {
+                ledMode.className = "px-3 py-1 rounded-full font-semibold inline-block bg-gray-600";
+            }
+        }
+    }
+
+    // 更新风扇状态显示
+    function updateFanStatus(status, mode) {
+        const fanStatus = document.getElementById("fanStatus");
+        const fanMode = document.getElementById("fanMode");
+
+        // 更新风扇状态
+        if (status !== undefined && status !== null) {
+            fanStatus.textContent = status;
+            systemState.board2.data.fan_status = status;
+
+            if (status === "ON") {
+                fanStatus.className = "px-3 py-1 rounded-full font-semibold bg-gradient-to-r from-blue-500 to-cyan-600 animate-pulse";
+            } else {
+                fanStatus.className = "px-3 py-1 rounded-full font-semibold bg-blue-900";
+            }
+        }
+
+        // 更新模式显示
+        if (mode !== undefined && mode !== null) {
+            fanMode.textContent = mode;
+            systemState.board2.data.fan_mode = mode;
+
+            if (mode === "AUTO") {
+                fanMode.className = "px-3 py-1 rounded-full font-semibold inline-block bg-purple-600";
+            } else {
+                fanMode.className = "px-3 py-1 rounded-full font-semibold inline-block bg-gray-600";
+            }
+        }
+    }
+
+    // 更新报警状态显示
+    function updateAlarmStatus(buzzerStatus, servoStatus, systemMode) {
+        const buzzerStatusElement = document.getElementById("buzzerStatus");
+        const servoStatusElement = document.getElementById("servoStatus");
+        const buzzerModeElement = document.getElementById("buzzerMode");
+        const servoModeElement = document.getElementById("servoMode");
+
+        // 更新蜂鸣器状态
+        if (buzzerStatus !== undefined && buzzerStatus !== null) {
+            buzzerStatusElement.textContent = buzzerStatus;
+            systemState.board3.data.buzzer_status = buzzerStatus;
+
+            if (buzzerStatus === "ON") {
+                buzzerStatusElement.className = "px-3 py-1 rounded-full font-semibold bg-gradient-to-r from-red-500 to-pink-600 animate-pulse";
+            } else {
+                buzzerStatusElement.className = "px-3 py-1 rounded-full font-semibold bg-blue-900";
+            }
+        }
+
+        // 更新舵机状态
+        if (servoStatus !== undefined && servoStatus !== null) {
+            servoStatus = servoStatus.toUpperCase();
+            servoStatusElement.textContent = servoStatus;
+            systemState.board3.data.servo_status = servoStatus;
+
+            if (servoStatus.includes("ON")) {
+                // 窗户开启状态（绿色）
+                servoStatusElement.className = "px-3 py-1 rounded-full font-semibold bg-gradient-to-r from-green-500 to-emerald-600";
+            } else {
+                // 窗户关闭状态（蓝色）
+                servoStatusElement.className = "px-3 py-1 rounded-full font-semibold bg-blue-900";
+            }
+        }
+
+        // 更新模式显示
+        if (systemMode !== undefined && systemMode !== null) {
+            buzzerModeElement.textContent = systemMode;
+            servoModeElement.textContent = systemMode;
+            systemState.board3.data.system_mode = systemMode;
+
+            if (systemMode === "AUTO") {
+                // 自动模式（紫色）
+                buzzerModeElement.className = "px-3 py-1 rounded-full font-semibold inline-block bg-purple-600";
+                servoModeElement.className = "px-3 py-1 rounded-full font-semibold inline-block bg-purple-600";
+            } else {
+                // 手动模式（灰色）
+                buzzerModeElement.className = "px-3 py-1 rounded-full font-semibold inline-block bg-gray-600";
+                servoModeElement.className = "px-3 py-1 rounded-full font-semibold inline-block bg-gray-600";
+            }
+        }
+    }
+
+    // 更新传感器数据显示
+    function updateSensorData(sensorData) {
+        // 光照强度
+        if (sensorData.light_intensity !== undefined) {
+            const lightIntensity = sensorData.light_intensity !== null ? sensorData.light_intensity : "--";
+            document.getElementById("lightIntensity").textContent = lightIntensity;
+            systemState.board1.data.light_intensity = sensorData.light_intensity;
+
+            // 根据光照强度设置颜色
+            const threshold = systemState.board1.data.light_threshold || 1500;
+            if (lightIntensity !== "--") {
+                if (lightIntensity < threshold) {
+                    document.getElementById("lightIntensity").className = "text-xl font-bold text-yellow-400";
+                } else {
+                    document.getElementById("lightIntensity").className = "text-xl font-bold text-blue-400";
+                }
+            }
+        }
+
+        // 人体检测
+        if (sensorData.human_presence !== undefined) {
+            let humanPresenceText = "--";
+            const humanPresenceElement = document.getElementById("humanPresence");
+            const indicatorElement = document.getElementById("humanPresenceIndicator");
+
+            if (sensorData.human_presence !== null) {
+                // 处理不同格式的人体感应数据 (1/0, true/false, "有人"/"无人")
+                const isPresent = sensorData.human_presence === "1" ||
+                    sensorData.human_presence === 1 ||
+                    sensorData.human_presence === true ||
+                    sensorData.human_presence === "有人";
+
+                humanPresenceText = isPresent ? "有人" : "无人";
+                systemState.board1.data.human_presence = isPresent ? "1" : "0";
+
+                // 设置颜色和指示器
+                if (isPresent) {
+                    humanPresenceElement.className = "text-xl font-bold text-green-500 text-blink";
+                    indicatorElement.className = "h-1 mt-1 rounded-full bg-green-500";
+                } else {
+                    humanPresenceElement.className = "text-xl font-bold text-gray-400";
+                    indicatorElement.className = "h-1 mt-1 rounded-full bg-gray-500";
+                }
+            } else {
+                humanPresenceElement.className = "text-xl font-bold text-gray-400";
+                indicatorElement.className = "h-1 mt-1 rounded-full bg-gray-500";
+            }
+
+            humanPresenceElement.textContent = humanPresenceText;
+        }
+
+        // 光强阈值
+        if (sensorData.light_threshold !== undefined && sensorData.light_threshold !== null) {
+            systemState.board1.data.light_threshold = sensorData.light_threshold;
+            document.getElementById("lightThreshold").textContent = sensorData.light_threshold;
+        }
+    }
+
+    // 更新风扇传感器数据显示
+    function updateFanSensorData(sensorData) {
+        // 温度
+        if (sensorData.temperature !== undefined) {
+            const temperature = sensorData.temperature !== null ? sensorData.temperature : "--";
+            document.getElementById("temperature").textContent = temperature;
+            systemState.board2.data.temperature = sensorData.temperature;
+
+            // 根据温度设置颜色
+            const threshold = systemState.board2.data.temp_threshold || 20.0;
+            if (temperature !== "--") {
+                if (temperature > threshold) {
+                    document.getElementById("temperature").className = "text-xl font-bold text-red-500";
+                } else {
+                    document.getElementById("temperature").className = "text-xl font-bold text-blue-400";
+                }
+            }
+        }
+
+        // 湿度
+        if (sensorData.humidity !== undefined) {
+            const humidity = sensorData.humidity !== null ? sensorData.humidity : "--";
+            document.getElementById("humidity").textContent = humidity;
+            systemState.board2.data.humidity = sensorData.humidity;
+
+            // 根据湿度设置颜色
+            const threshold = systemState.board2.data.humidity_threshold || 90.0;
+            if (humidity !== "--") {
+                if (humidity > threshold) {
+                    document.getElementById("humidity").className = "text-xl font-bold text-red-500";
+                } else {
+                    document.getElementById("humidity").className = "text-xl font-bold text-blue-400";
+                }
+            }
+        }
+
+        // 温度阈值
+        if (sensorData.temp_threshold !== undefined && sensorData.temp_threshold !== null) {
+            systemState.board2.data.temp_threshold = sensorData.temp_threshold;
+            document.getElementById("tempThreshold").textContent = sensorData.temp_threshold;
+        }
+
+        // 湿度阈值
+        if (sensorData.humidity_threshold !== undefined && sensorData.humidity_threshold !== null) {
+            systemState.board2.data.humidity_threshold = sensorData.humidity_threshold;
+            document.getElementById("humidThreshold").textContent = sensorData.humidity_threshold;
+        }
+    }
+
+    // 更新烟雾传感器数据显示
+    function updateSmokeSensorData(sensorData) {
+        // 烟雾浓度
+        if (sensorData.smoke_value !== undefined) {
+            const smokeValue = sensorData.smoke_value !== null ? sensorData.smoke_value : "--";
+            document.getElementById("smokeValue").textContent = smokeValue;
+            systemState.board3.data.smoke_value = sensorData.smoke_value;
+
+            // 根据烟雾浓度设置颜色
+            const threshold = systemState.board3.data.smoke_threshold || 500;
+            if (smokeValue !== "--") {
+                if (smokeValue > threshold) {
+                    document.getElementById("smokeValue").className = "text-xl font-bold text-red-500";
+                } else {
+                    document.getElementById("smokeValue").className = "text-xl font-bold text-blue-400";
+                }
+            }
+        }
+
+        // 烟雾阈值
+        if (sensorData.smoke_threshold !== undefined && sensorData.smoke_threshold !== null) {
+            systemState.board3.data.smoke_threshold = sensorData.smoke_threshold;
+            document.getElementById("smokeThreshold").textContent = sensorData.smoke_threshold;
+        }
+    }
+
+    // 更新系统状态显示
+    function updateSystemStatus() {
+        const now = new Date();
+        systemState.lastUpdate = now;
+
+        // 更新时间显示
+        document.getElementById("lastUpdate").textContent = now.toLocaleTimeString();
+        document.getElementById("lastUpdateTime").textContent = now.toLocaleTimeString().slice(0, -3);
+
+        // 更新连接状态
+        const connectionElement = document.getElementById("connectionStatus");
+        if (systemState.connection.status === 'connected') {
+            connectionElement.className = "bg-green-500 text-white px-3 py-1 rounded-full text-sm";
+            connectionElement.innerHTML = '<i class="fas fa-wifi mr-1"></i> 已连接';
+        } else {
+            connectionElement.className = "bg-red-500 text-white px-3 py-1 rounded-full text-sm";
+            connectionElement.innerHTML = `<i class="fas fa-wifi mr-1"></i> 断开 (重试 ${systemState.connection.retryCount})`;
+        }
+
+        // 更新数据新鲜度指示器
+        const freshnessElement = document.getElementById("dataFreshness");
+        if (systemState.connection.lastSuccess && (now - systemState.connection.lastSuccess) < 5000) {
+            freshnessElement.className = "bg-blue-500 text-white px-2 py-1 rounded-full text-xs";
+        } else {
+            freshnessElement.className = "bg-yellow-500 text-white px-2 py-1 rounded-full text-xs";
+        }
+    }
+
+    // 控制设备
+    async function controlDevice(board, device, command) {
+        try {
+            // 处理设备1和2的特殊情况
+            if (board === 'board1' || board === 'board2') {
+                command = device; // 对于设备1和2，第二个参数实际上是command
+                device = null;    // 设备1和2不需要device参数
+            }
+
+            // 显示加载状态
+            let statusElement;
+            if (board === 'board1') {
+                statusElement = document.getElementById("ledStatus");
+            } else if (board === 'board2') {
+                statusElement = document.getElementById("fanStatus");
+            } else if (board === 'board3') {
+                statusElement = document.getElementById((device === 'BUZZER' ? 'buzzer' : 'servo') + "Status");
+            }
+
+            const originalText = statusElement.textContent;
+            statusElement.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> 处理中...';
+
+            addDebugLog(`发送控制命令到 ${board} ${device}: ${command}`);
+
+            let endpoint = `/control/${board}`;
+            let body = { command: command };
+
+            if (board === 'board3') {
+                body.device = device;
+            }
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body)
+            });
+
+            const result = await response.json();
+
+            if (result.status === "success") {
+                let deviceName = '';
+                if (board === 'board1') deviceName = 'LED';
+                else if (board === 'board2') deviceName = '风扇';
+                else if (board === 'board3') {
+                    if (device === 'BUZZER') deviceName = '蜂鸣器';
+                    else if (device === 'SERVO') deviceName = '窗户';
+                    else deviceName = '系统';
+                }
+
+                showNotification(`${deviceName}控制成功: ${command}`);
+                addDebugLog(`控制成功: ${result.message}`);
+
+                // 立即更新本地状态
+                if (board === 'board1') {
+                    if (command === 'AUTO') {
+                        systemState.board1.data.led_mode = 'AUTO';
+                    } else {
+                        systemState.board1.data.led_status = command;
+                        systemState.board1.data.led_mode = result.mode || 'MANUAL';
+                    }
+                } else if (board === 'board2') {
+                    if (command === 'AUTO') {
+                        systemState.board2.data.fan_mode = 'AUTO';
+                    } else {
+                        systemState.board2.data.fan_status = command;
+                        systemState.board2.data.fan_mode = result.mode || 'MANUAL';
+                    }
+                } else if (board === 'board3') {
+                    if (command === 'AUTO') {
+                        systemState.board3.data.system_mode = 'AUTO';
+                    } else if (command === 'RESET') {
+                        systemState.board3.data.system_mode = 'AUTO';
+                        systemState.board3.data.require_reset = false;
+                    } else {
+                        if (device === 'BUZZER') {
+                            systemState.board3.data.buzzer_status = command;
+                        } else if (device === 'SERVO') {
+                            systemState.board3.data.servo_status = command === 'ON' ? 'ON' : 'OFF';
+                        }
+                        systemState.board3.data.system_mode = result.mode || 'MANUAL';
+                    }
+                }
+
+                updateUI(board, systemState[board].data);
+            } else {
+                throw new Error(result.message || "控制失败");
+            }
+        } catch (error) {
+            console.error("控制设备失败:", error);
+            addDebugLog(`控制失败: ${error.message}`);
+            showNotification("控制命令发送失败: " + error.message);
+
+            // 恢复之前状态
+            if (board === 'board1') {
+                updateLEDStatus(systemState.board1.data.led_status, systemState.board1.data.led_mode);
+            } else if (board === 'board2') {
+                updateFanStatus(systemState.board2.data.fan_status, systemState.board2.data.fan_mode);
+            } else if (board === 'board3') {
+                updateAlarmStatus(
+                    systemState.board3.data.buzzer_status,
+                    systemState.board3.data.servo_status,
+                    systemState.board3.data.system_mode
+                );
+            }
+        }
+    }
+
+    // 更新阈值显示
+    function updateThresholdDisplay(value) {
+        document.getElementById("thresholdValue").textContent = value;
+    }
+
+    function updateTempThresholdDisplay(value) {
+        document.getElementById("tempThresholdValue").textContent = value;
+    }
+
+    function updateHumidThresholdDisplay(value) {
+        document.getElementById("humidThresholdValue").textContent = value;
+    }
+
+    function updateSmokeThresholdDisplay(value) {
+        document.getElementById("smokeThresholdValue").textContent = value;
+    }
+
+    // 提交新的光强阈值
+    async function updateThreshold(value) {
+        try {
+            const threshold = parseInt(value);
+            addDebugLog(`发送新的光强阈值: ${threshold}`);
+
+            const response = await fetch('/config/board1', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ threshold: threshold })
+            });
+
+            const result = await response.json();
+
+            if (result.status === "success") {
+                showNotification(`光强阈值已更新: ${threshold}`);
+                systemState.board1.data.light_threshold = threshold;
+                document.getElementById("lightThreshold").textContent = threshold;
+                addDebugLog(`阈值更新成功: ${result.message}`);
+            } else {
+                throw new Error(result.message || "更新阈值失败");
+            }
+        } catch (error) {
+            console.error("更新阈值失败:", error);
+            addDebugLog(`阈值更新失败: ${error.message}`);
+            showNotification("更新阈值失败: " + error.message);
+
+            // 恢复之前的值
+            document.getElementById("thresholdSlider").value = systemState.board1.data.light_threshold;
+            document.getElementById("thresholdValue").textContent = systemState.board1.data.light_threshold;
+        }
+    }
+
+    // 提交新的温度阈值
+    async function updateTempThreshold(value) {
+        try {
+            const threshold = parseFloat(value);
+            addDebugLog(`发送新的温度阈值: ${threshold}`);
+
+            const response = await fetch('/config/board2', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ temp_threshold: threshold })
+            });
+
+            const result = await response.json();
+
+            if (result.status === "success") {
+                showNotification(`温度阈值已更新: ${threshold}℃`);
+                systemState.board2.data.temp_threshold = threshold;
+                document.getElementById("tempThreshold").textContent = threshold;
+                addDebugLog(`温度阈值更新成功: ${result.message}`);
+            } else {
+                throw new Error(result.message || "更新温度阈值失败");
+            }
+        } catch (error) {
+            console.error("更新温度阈值失败:", error);
+            addDebugLog(`温度阈值更新失败: ${error.message}`);
+            showNotification("更新温度阈值失败: " + error.message);
+
+            // 恢复之前的值
+            document.getElementById("tempThresholdSlider").value = systemState.board2.data.temp_threshold;
+            document.getElementById("tempThresholdValue").textContent = systemState.board2.data.temp_threshold;
+        }
+    }
+
+    // 提交新的湿度阈值
+    async function updateHumidThreshold(value) {
+        try {
+            const threshold = parseFloat(value);
+            addDebugLog(`发送新的湿度阈值: ${threshold}`);
+
+            const response = await fetch('/config/board2', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ humidity_threshold: threshold })
+            });
+
+            const result = await response.json();
+
+            if (result.status === "success") {
+                showNotification(`湿度阈值已更新: ${threshold}%`);
+                systemState.board2.data.humidity_threshold = threshold;
+                document.getElementById("humidThreshold").textContent = threshold;
+                addDebugLog(`湿度阈值更新成功: ${result.message}`);
+            } else {
+                throw new Error(result.message || "更新湿度阈值失败");
+            }
+        } catch (error) {
+            console.error("更新湿度阈值失败:", error);
+            addDebugLog(`湿度阈值更新失败: ${error.message}`);
+            showNotification("更新湿度阈值失败: " + error.message);
+
+            // 恢复之前的值
+            document.getElementById("humidThresholdSlider").value = systemState.board2.data.humidity_threshold;
+            document.getElementById("humidThresholdValue").textContent = systemState.board2.data.humidity_threshold;
+        }
+    }
+
+    // 提交新的烟雾阈值
+    async function updateSmokeThreshold(value) {
+        try {
+            const threshold = parseInt(value);
+            addDebugLog(`发送新的烟雾阈值: ${threshold}`);
+
+            const response = await fetch('/config/board3', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ threshold: threshold })
+            });
+
+            const result = await response.json();
+
+            if (result.status === "success") {
+                showNotification(`烟雾阈值已更新: ${threshold}`);
+                systemState.board3.data.smoke_threshold = threshold;
+                document.getElementById("smokeThreshold").textContent = threshold;
+                addDebugLog(`烟雾阈值更新成功: ${result.message}`);
+            } else {
+                throw new Error(result.message || "更新烟雾阈值失败");
+            }
+        } catch (error) {
+            console.error("更新烟雾阈值失败:", error);
+            addDebugLog(`烟雾阈值更新失败: ${error.message}`);
+            showNotification("更新烟雾阈值失败: " + error.message);
+
+            // 恢复之前的值
+            document.getElementById("smokeThresholdSlider").value = systemState.board3.data.smoke_threshold;
+            document.getElementById("smokeThresholdValue").textContent = systemState.board3.data.smoke_threshold;
+        }
+    }
+
+    // 获取系统状态
+    async function fetchStatus(board) {
+        try {
+            const startTime = Date.now();
+            addDebugLog(`正在获取 ${board} 状态...`);
+
+            const response = await fetch(`/status/${board}`);
+
+            if (!response.ok) {
+                throw new Error(`HTTP错误! 状态码: ${response.status}`);
+            }
+
+            const data = await response.json();
+            addDebugLog(`收到 ${board} 响应: ${JSON.stringify(data)}`);
+
+            if (data.status === "success") {
+                // 更新连接状态
+                systemState.connection.status = 'connected';
+                systemState.connection.lastSuccess = new Date();
+                systemState.connection.retryCount = 0;
+
+                // 合并新数据
+                systemState[board].data = {
+                    ...systemState[board].data,
+                    ...data.data
+                };
+
+                updateUI(board, systemState[board].data);
+                addDebugLog(`UI更新完成, 耗时: ${Date.now() - startTime}ms`);
+
+                // 更新系统状态
+                document.getElementById("systemStatus").textContent = "运行中";
+                document.getElementById("systemStatus").className = "font-semibold text-green-500";
+                document.getElementById("refreshStatus").textContent = "正常";
+            } else {
+                throw new Error(data.message || "获取状态失败");
+            }
+        } catch (error) {
+            console.error(`获取 ${board} 状态失败:`, error);
+            addDebugLog(`获取 ${board} 状态失败: ${error.message}`);
+
+            // 更新连接状态
+            systemState.connection.status = 'disconnected';
+            systemState.connection.retryCount++;
+
+            // 更新系统状态显示
+            document.getElementById("systemStatus").textContent = "连接错误";
+            document.getElementById("systemStatus").className = "font-semibold text-red-500";
+            document.getElementById("refreshStatus").textContent = "失败";
+
+            // 3秒后重试
+            setTimeout(() => fetchStatus(board), 3000);
+        }
+    }
+
+    // 显示通知
+    function showNotification(message) {
+        const notification = document.createElement("div");
+        notification.className = "fixed top-4 right-4 px-4 py-2 bg-indigo-600 text-white rounded-md shadow-lg z-50 animate-fadeIn";
+        notification.innerHTML = `<i class="fas fa-info-circle mr-2"></i> ${message}`;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.classList.add("animate-fadeOut");
+            setTimeout(() => notification.remove(), 500);
+        }, 3000);
+    }
+
+    // 添加调试日志
+    function addDebugLog(message) {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString();
+        const logEntry = document.createElement("div");
+        logEntry.textContent = `[${timeStr}] ${message}`;
+        document.getElementById("debugLog").appendChild(logEntry);
+
+        // 自动滚动到底部
+        const debugConsole = document.getElementById("debugConsole");
+        debugConsole.scrollTop = debugConsole.scrollHeight;
+    }
+</script>
+</body>
+</html>
